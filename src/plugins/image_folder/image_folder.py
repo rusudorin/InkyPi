@@ -1,9 +1,12 @@
 from plugins.base_plugin.base_plugin import BasePlugin
-from PIL import Image, ImageOps, ImageColor
+from PIL import Image, ImageOps, ImageColor, ImageDraw, ImageFont
+from PIL.ExifTags import Base as ExifBase, IFD as ExifIFD
+from datetime import datetime
 import logging
 import os
 import random
 
+from utils.app_utils import get_font
 from utils.image_utils import pad_image_blur
 
 logger = logging.getLogger(__name__)
@@ -18,6 +21,80 @@ def list_files_in_folder(folder_path):
                 image_files.append(os.path.join(root, f))
 
     return image_files
+
+def _parse_exif_date(value):
+    """Parse an EXIF date string ('YYYY:MM:DD HH:MM:SS') into a formatted display string."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.strptime(str(value).strip(), "%Y:%m:%d %H:%M:%S")
+        return parsed.strftime("%b %d, %Y")
+    except (ValueError, TypeError):
+        logger.debug(f"Unparseable EXIF date: {value!r}")
+        return None
+
+def get_date_taken(image_path):
+    """Return the photo's capture date as a formatted string, or None if unavailable."""
+    try:
+        with Image.open(image_path) as img:
+            exif = img.getexif()
+    except Exception as e:
+        logger.debug(f"Could not read EXIF from {image_path}: {e}")
+        return None
+
+    if not exif:
+        return None
+
+    # DateTimeOriginal / DateTimeDigitized live in the Exif sub-IFD; DateTime is in the base IFD.
+    try:
+        exif_ifd = exif.get_ifd(ExifIFD.Exif)
+    except Exception:
+        exif_ifd = {}
+
+    candidates = (
+        exif_ifd.get(ExifBase.DateTimeOriginal.value),
+        exif_ifd.get(ExifBase.DateTimeDigitized.value),
+        exif.get(ExifBase.DateTime.value),
+    )
+    for value in candidates:
+        formatted = _parse_exif_date(value)
+        if formatted:
+            return formatted
+
+    return None
+
+def overlay_date_taken(img, date_text):
+    """Draw the date text inside a black frame in the bottom-right corner of the image."""
+    img = img.convert("RGB")
+    draw = ImageDraw.Draw(img)
+    width, height = img.size
+
+    font_size = max(14, height // 24)
+    font = get_font("Jost", font_size, "bold") or ImageFont.load_default()
+
+    text_bbox = draw.textbbox((0, 0), date_text, font=font)
+    text_width = text_bbox[2] - text_bbox[0]
+    text_height = text_bbox[3] - text_bbox[1]
+
+    pad = max(6, font_size // 3)
+    margin = max(8, font_size // 2)
+
+    box_width = text_width + 2 * pad
+    box_height = text_height + 2 * pad
+    box_x1 = width - margin
+    box_y1 = height - margin
+    box_x0 = box_x1 - box_width
+    box_y0 = box_y1 - box_height
+
+    radius = max(4, pad // 2)
+    draw.rounded_rectangle([box_x0, box_y0, box_x1, box_y1], radius=radius, fill="black")
+
+    # Center the text within the black frame, compensating for the font bbox offset.
+    text_x = box_x0 + pad - text_bbox[0]
+    text_y = box_y0 + pad - text_bbox[1]
+    draw.text((text_x, text_y), date_text, font=font, fill="white")
+
+    return img
 
 class ImageFolder(BasePlugin):
     def _render_image(self, image_url, dimensions, settings):
@@ -80,7 +157,8 @@ class ImageFolder(BasePlugin):
         grid_mode = settings.get('gridMode') == "true"
         use_padding = settings.get('padImage') == "true"
         background_option = settings.get('backgroundOption', 'blur')
-        logger.debug(f"Settings: grid_mode={grid_mode}, pad_image={use_padding}, background_option={background_option}")
+        show_date_taken = settings.get('showDateTaken') == "true"
+        logger.debug(f"Settings: grid_mode={grid_mode}, pad_image={use_padding}, background_option={background_option}, show_date_taken={show_date_taken}")
 
         try:
             if grid_mode:
@@ -91,6 +169,14 @@ class ImageFolder(BasePlugin):
             logger.debug(f"Full path: {image_url}")
 
             img = self._render_image(image_url, dimensions, settings)
+
+            if show_date_taken:
+                date_text = get_date_taken(image_url)
+                if date_text:
+                    logger.info(f"Overlaying date taken: {date_text}")
+                    img = overlay_date_taken(img, date_text)
+                else:
+                    logger.info("Date taken overlay enabled but no capture date found in image")
 
             logger.info("=== Image Folder Plugin: Image generation complete ===")
             return img
