@@ -19,6 +19,16 @@
             <input type="color" id="backgroundColor" name="backgroundColor" value="#ffffff" class="color-picker"/>
         </div>
     </div>
+
+    <div class="form-group">
+        <label for="showDateTaken" class="form-label">Show date taken:</label>
+        <div class="toggle-container">
+            <input type="checkbox" id="showDateTaken" name="showDateTaken" class="toggle-checkbox" value="true">
+            <label for="showDateTaken" class="toggle-label"></label>
+        </div>
+        <!-- Hidden input ensures 'false' is always sent when unchecked -->
+        <input type="hidden" name="showDateTaken" value="false">
+    </div>
 </div>
 
 <div class="form-group">
@@ -33,6 +43,7 @@
         let backgroundOption = "blur"
         if (loadPluginSettings) {
             document.getElementById('folder_path').value = pluginSettings.folder_path;
+            document.getElementById('showDateTaken').checked = pluginSettings.showDateTaken == 'true';
             document.getElementById('padImage').checked = pluginSettings.padImage == 'false';
             document.getElementById('backgroundColor').value = pluginSettings.backgroundColor;
 
