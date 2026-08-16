@@ -28,6 +28,10 @@ def change_orientation(image, orientation, inverted=False):
     if inverted:
         angle = (angle + 180) % 360
 
+    # rotate() copies the whole image even for a 0° angle, so skip that case.
+    if angle == 0:
+        return image
+
     return image.rotate(angle, expand=1)
 
 def resize_image(image, desired_size, image_settings=[]):
