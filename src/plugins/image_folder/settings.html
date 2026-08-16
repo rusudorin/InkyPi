@@ -39,6 +39,18 @@
         <!-- Hidden input ensures 'false' is always sent when unchecked -->
         <input type="hidden" name="showDateTaken" value="false">
     </div>
+
+    <div class="form-group">
+        <label for="dateFormat" class="form-label">Date format:</label>
+        <select id="dateFormat" name="dateFormat" class="form-input">
+            <option value="%b %d, %Y">Aug 16, 2026</option>
+            <option value="%d %b %Y">16 Aug 2026</option>
+            <option value="%B %d, %Y">August 16, 2026</option>
+            <option value="%Y-%m-%d">2026-08-16</option>
+            <option value="%m/%d/%Y">08/16/2026</option>
+            <option value="%d/%m/%Y">16/08/2026</option>
+        </select>
+    </div>
 </div>
 
 <div class="form-group">
@@ -55,6 +67,9 @@
             document.getElementById('folder_path').value = pluginSettings.folder_path;
             document.getElementById('gridMode').checked = pluginSettings.gridMode == 'true';
             document.getElementById('showDateTaken').checked = pluginSettings.showDateTaken == 'true';
+            if (pluginSettings.dateFormat) {
+                document.getElementById('dateFormat').value = pluginSettings.dateFormat;
+            }
             document.getElementById('padImage').checked = pluginSettings.padImage == 'false';
             document.getElementById('backgroundColor').value = pluginSettings.backgroundColor;
 
