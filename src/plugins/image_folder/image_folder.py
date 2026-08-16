@@ -22,18 +22,30 @@ def list_files_in_folder(folder_path):
 
     return image_files
 
-def _parse_exif_date(value):
+DEFAULT_DATE_FORMAT = "%b %d, %Y"
+
+# Supported strftime patterns for the date-taken overlay.
+SUPPORTED_DATE_FORMATS = (
+    "%b %d, %Y",
+    "%d %b %Y",
+    "%B %d, %Y",
+    "%Y-%m-%d",
+    "%m/%d/%Y",
+    "%d/%m/%Y",
+)
+
+def _parse_exif_date(value, date_format=DEFAULT_DATE_FORMAT):
     """Parse an EXIF date string ('YYYY:MM:DD HH:MM:SS') into a formatted display string."""
     if not value:
         return None
     try:
         parsed = datetime.strptime(str(value).strip(), "%Y:%m:%d %H:%M:%S")
-        return parsed.strftime("%b %d, %Y")
+        return parsed.strftime(date_format)
     except (ValueError, TypeError):
         logger.debug(f"Unparseable EXIF date: {value!r}")
         return None
 
-def get_date_taken(image_path):
+def get_date_taken(image_path, date_format=DEFAULT_DATE_FORMAT):
     """Return the photo's capture date as a formatted string, or None if unavailable."""
     try:
         with Image.open(image_path) as img:
@@ -57,7 +69,7 @@ def get_date_taken(image_path):
         exif.get(ExifBase.DateTime.value),
     )
     for value in candidates:
-        formatted = _parse_exif_date(value)
+        formatted = _parse_exif_date(value, date_format)
         if formatted:
             return formatted
 
@@ -134,7 +146,11 @@ class ImageFolder(BasePlugin):
         use_padding = settings.get('padImage') == "true"
         background_option = settings.get('backgroundOption', 'blur')
         show_date_taken = settings.get('showDateTaken') == "true"
-        logger.debug(f"Settings: pad_image={use_padding}, background_option={background_option}, show_date_taken={show_date_taken}")
+        date_format = settings.get('dateFormat') or DEFAULT_DATE_FORMAT
+        if date_format not in SUPPORTED_DATE_FORMATS:
+            logger.warning(f"Unsupported date format {date_format!r}, falling back to default")
+            date_format = DEFAULT_DATE_FORMAT
+        logger.debug(f"Settings: pad_image={use_padding}, background_option={background_option}, show_date_taken={show_date_taken}, date_format={date_format!r}")
 
         try:
             # Use adaptive loader for memory-efficient processing
@@ -158,7 +174,7 @@ class ImageFolder(BasePlugin):
                 img = ImageOps.fit(img, dimensions, method=Image.LANCZOS)
 
             if show_date_taken:
-                date_text = get_date_taken(image_url)
+                date_text = get_date_taken(image_url, date_format)
                 if date_text:
                     logger.info(f"Overlaying date taken: {date_text}")
                     img = overlay_date_taken(img, date_text)
