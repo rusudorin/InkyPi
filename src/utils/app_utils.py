@@ -3,6 +3,7 @@ import os
 import socket
 import subprocess
 
+from functools import lru_cache
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -89,6 +90,7 @@ def get_font(font_name, font_size=50, font_weight="normal"):
 
     return None
 
+@lru_cache(maxsize=1)
 def get_fonts():
     fonts_list = []
     for font_family, variants in FONT_FAMILIES.items():
