@@ -1,5 +1,5 @@
 from plugins.base_plugin.base_plugin import BasePlugin
-from PIL import Image, ImageOps, ImageColor, ImageDraw, ImageFont
+from PIL import Image, ImageOps, ImageColor, ImageDraw, ImageFont, ImageFilter
 from PIL.ExifTags import Base as ExifBase, IFD as ExifIFD
 from datetime import datetime
 import logging
@@ -10,6 +10,14 @@ from utils.app_utils import get_font
 from utils.image_utils import pad_image_blur
 
 logger = logging.getLogger(__name__)
+
+# Font size as a fraction of the image height, keyed by the "date size" setting.
+DATE_SIZE_DIVISORS = {
+    "small": 24,
+    "medium": 17,
+    "large": 12,
+}
+DEFAULT_DATE_SIZE = "medium"
 
 def list_files_in_folder(folder_path):
     """Return a list of image file paths in the given folder, excluding hidden files."""
@@ -75,13 +83,43 @@ def get_date_taken(image_path, date_format=DEFAULT_DATE_FORMAT):
 
     return None
 
-def overlay_date_taken(img, date_text):
-    """Draw the date text inside a black frame in the bottom-right corner of the image."""
+def _region_busyness(img, box):
+    """Return an edge-energy score for a region; lower means flatter/less busy."""
+    x0, y0, x1, y1 = (int(round(v)) for v in box)
+    region = img.crop((x0, y0, x1, y1)).convert("L")
+    edges = region.filter(ImageFilter.FIND_EDGES)
+    histogram = edges.histogram()
+    # Weighted sum of edge intensities, normalized by area so region sizes compare fairly.
+    energy = sum(intensity * count for intensity, count in enumerate(histogram))
+    area = max(1, (x1 - x0) * (y1 - y0))
+    return energy / area
+
+def _choose_least_busy_corner(img, box_width, box_height, margin):
+    """Pick the corner whose badge footprint covers the least busy area of the image."""
+    width, height = img.size
+    corners = {
+        "top-left": (margin, margin),
+        "top-right": (width - margin - box_width, margin),
+        "bottom-left": (margin, height - margin - box_height),
+        "bottom-right": (width - margin - box_width, height - margin - box_height),
+    }
+    best_corner = None
+    best_score = None
+    for name, (x0, y0) in corners.items():
+        score = _region_busyness(img, (x0, y0, x0 + box_width, y0 + box_height))
+        logger.debug(f"Corner {name} busyness={score:.2f}")
+        if best_score is None or score < best_score:
+            best_score, best_corner = score, (x0, y0)
+    return best_corner
+
+def overlay_date_taken(img, date_text, size=DEFAULT_DATE_SIZE):
+    """Draw the date text inside a black frame in the least busy corner of the image."""
     img = img.convert("RGB")
     draw = ImageDraw.Draw(img)
     width, height = img.size
 
-    font_size = max(14, height // 24)
+    divisor = DATE_SIZE_DIVISORS.get(size, DATE_SIZE_DIVISORS[DEFAULT_DATE_SIZE])
+    font_size = max(14, height // divisor)
     font = get_font("Jost", font_size, "bold") or ImageFont.load_default()
 
     text_bbox = draw.textbbox((0, 0), date_text, font=font)
@@ -93,10 +131,10 @@ def overlay_date_taken(img, date_text):
 
     box_width = text_width + 2 * pad
     box_height = text_height + 2 * pad
-    box_x1 = width - margin
-    box_y1 = height - margin
-    box_x0 = box_x1 - box_width
-    box_y0 = box_y1 - box_height
+
+    box_x0, box_y0 = _choose_least_busy_corner(img, box_width, box_height, margin)
+    box_x1 = box_x0 + box_width
+    box_y1 = box_y0 + box_height
 
     radius = max(4, pad // 2)
     draw.rounded_rectangle([box_x0, box_y0, box_x1, box_y1], radius=radius, fill="black")
@@ -150,7 +188,11 @@ class ImageFolder(BasePlugin):
         if date_format not in SUPPORTED_DATE_FORMATS:
             logger.warning(f"Unsupported date format {date_format!r}, falling back to default")
             date_format = DEFAULT_DATE_FORMAT
-        logger.debug(f"Settings: pad_image={use_padding}, background_option={background_option}, show_date_taken={show_date_taken}, date_format={date_format!r}")
+        date_size = settings.get('dateSize') or DEFAULT_DATE_SIZE
+        if date_size not in DATE_SIZE_DIVISORS:
+            logger.warning(f"Unsupported date size {date_size!r}, falling back to default")
+            date_size = DEFAULT_DATE_SIZE
+        logger.debug(f"Settings: pad_image={use_padding}, background_option={background_option}, show_date_taken={show_date_taken}, date_format={date_format!r}, date_size={date_size!r}")
 
         try:
             # Use adaptive loader for memory-efficient processing
@@ -177,7 +219,7 @@ class ImageFolder(BasePlugin):
                 date_text = get_date_taken(image_url, date_format)
                 if date_text:
                     logger.info(f"Overlaying date taken: {date_text}")
-                    img = overlay_date_taken(img, date_text)
+                    img = overlay_date_taken(img, date_text, date_size)
                 else:
                     logger.info("Date taken overlay enabled but no capture date found in image")
 
