@@ -51,6 +51,15 @@
             <option value="%d/%m/%Y">16/08/2026</option>
         </select>
     </div>
+
+    <div class="form-group">
+        <label for="dateSize" class="form-label">Date size:</label>
+        <select id="dateSize" name="dateSize" class="form-input">
+            <option value="small">Small</option>
+            <option value="medium" selected>Medium</option>
+            <option value="large">Large</option>
+        </select>
+    </div>
 </div>
 
 <div class="form-group">
@@ -69,6 +78,9 @@
             document.getElementById('showDateTaken').checked = pluginSettings.showDateTaken == 'true';
             if (pluginSettings.dateFormat) {
                 document.getElementById('dateFormat').value = pluginSettings.dateFormat;
+            }
+            if (pluginSettings.dateSize) {
+                document.getElementById('dateSize').value = pluginSettings.dateSize;
             }
             document.getElementById('padImage').checked = pluginSettings.padImage == 'false';
             document.getElementById('backgroundColor').value = pluginSettings.backgroundColor;
