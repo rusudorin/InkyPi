@@ -1,5 +1,15 @@
 <div class="form-group">
     <div class="form-group">
+        <label for="gridMode" class="form-label">Four-way split (2x2 grid):</label>
+        <div class="toggle-container">
+            <input type="checkbox" id="gridMode" name="gridMode" class="toggle-checkbox" value="true">
+            <label for="gridMode" class="toggle-label"></label>
+        </div>
+        <!-- Hidden input ensures 'false' is always sent when unchecked -->
+        <input type="hidden" name="gridMode" value="false">
+    </div>
+
+    <div class="form-group">
         <label for="padImage" class="form-label">Scale to Fit:</label>
         <div class="toggle-container">
             <input type="checkbox" id="padImage" name="padImage" class="toggle-checkbox" value="false">
@@ -33,6 +43,7 @@
         let backgroundOption = "blur"
         if (loadPluginSettings) {
             document.getElementById('folder_path').value = pluginSettings.folder_path;
+            document.getElementById('gridMode').checked = pluginSettings.gridMode == 'true';
             document.getElementById('padImage').checked = pluginSettings.padImage == 'false';
             document.getElementById('backgroundColor').value = pluginSettings.backgroundColor;
 
